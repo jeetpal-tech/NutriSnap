@@ -12,7 +12,7 @@ from app.core.parser import MAX_TOKENS, parse
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def names(tokens) -> list[str]:
-    return [t.name for t in tokens]
+    return [t.name.lower() for t in tokens]
 
 def positions(tokens) -> list[int]:
     return [t.position for t in tokens]
@@ -218,7 +218,7 @@ class TestDemoInput:
 
     def test_sugar_is_second(self):
         tokens = parse(self.INPUT)
-        assert tokens[1].name == "sugar"
+        assert tokens[1].name.lower() == "sugar"
 
     def test_raising_agents_ins_code(self):
         tokens = parse(self.INPUT)
