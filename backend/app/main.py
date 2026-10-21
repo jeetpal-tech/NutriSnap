@@ -11,7 +11,6 @@ Rules-only (no model):
 from __future__ import annotations
 
 import logging
-import re
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -22,6 +21,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router, set_knowledge_base
 from app.config import settings
 from app.core.knowledge_base import KnowledgeBase
+from app.core.ml.manager import init_background_model_loader
 
 logging.basicConfig(
     level=settings.log_level.upper(),
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Load the knowledge base at startup. ML loading comes in M3."""
+    """Load the knowledge base and initiate background model loading at startup."""
     logger.info("NutriSnap startup — loading knowledge base …")
     kb = KnowledgeBase()
     kb.load()
@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         len(kb.entries),
         kb.version,
     )
+    init_background_model_loader()
     yield
     logger.info("NutriSnap shutdown.")
 
@@ -62,7 +63,6 @@ app = FastAPI(
 _origins = settings.cors_origins_list()
 _origin_regex = settings.cors_origin_regex or None
 
-# Build middleware kwargs
 _cors_kwargs: dict = dict(
     allow_origins=_origins,
     allow_credentials=False,

@@ -95,9 +95,10 @@ class TestFlagPenalties:
         # 1 ingredient at pos 4 (pos_mult=1.0)
         items = [make_match(4, f"id_{flag}", flag, canonical=flag)]
         res = score_items(items, kb)
+        start_base = kb.rules["rule_base"]["start"]
         assert res.penalty == expected_penalty
-        assert res.base == 85.0  # <= 8 items, 0 unflagged additives
-        expected_score = round(85 - expected_penalty)
+        assert res.base == float(start_base)  # <= 8 items, 0 unflagged additives
+        expected_score = round(start_base - expected_penalty)
         # Note: trans_fat_source triggers safety cap 69 if score > 69
         if flag == "trans_fat_source":
             assert res.score == min(69, expected_score)
@@ -200,10 +201,11 @@ class TestCaps:
             make_match(4, "trans4", "trans_fat_source"),
         ]
         res = score_items(items, kb)
+        start_base = kb.rules["rule_base"]["start"]
         assert res.penalty_before_cap == 80.0
         assert res.penalty == 70.0
-        # base=85, penalty=70 -> 15. Safety cap 69 doesn't lower 15.
-        assert res.score == 15
+        # base=start_base, penalty=70. Safety cap 69 doesn't lower it if <= 69.
+        assert res.score == round(start_base - 70)
 
     def test_bonus_cap_10(self, kb):
         """Sum of bonus flags capped at 10."""
@@ -221,8 +223,7 @@ class TestCaps:
 
 class TestSafetyCaps:
     def test_trans_fat_safety_cap_limits_score_to_69(self, kb):
-        """Even if score would be 85 - 20 = 65, what if bonus puts it above 69?"""
-        # Base 85 - 20 (trans fat) + 10 (bonus) = 75 -> safety cap brings to 69
+        """Even if score would be start_base - 20, what if bonus puts it above 69?"""
         items = [
             make_match(1, "oats", "whole_grain_or_fibre"),      # +4
             make_match(2, "ragi", "whole_grain_or_fibre"),      # +4
@@ -230,13 +231,12 @@ class TestSafetyCaps:
             make_match(4, "vanaspati", "trans_fat_source"),     # -20
         ]
         res = score_items(items, kb)
-        # Raw score: 85 - 20 + 10 = 75
+        # Raw score: start_base - 20 + 10 (e.g. 80-20+10=70) -> safety cap brings to 69
         assert res.score == 69
         assert any("trans_fat_source" in cap["reason"] for cap in res.caps_applied)
 
     def test_sugar_at_pos_1_safety_cap_limits_score_to_69(self, kb):
         """Sugar as first ingredient limits score to at most 69."""
-        # Base 85 - 18 (sugar pos 1 = 12*1.5) + 10 (bonus) = 77 -> capped at 69
         items = [
             make_match(1, "sugar", "added_sugar"),
             make_match(2, "oats", "whole_grain_or_fibre"),
@@ -256,8 +256,10 @@ class TestSafetyCaps:
             make_match(4, "almonds", "legume_nut_seed"),
         ]
         res = score_items(items, kb)
-        # Sugar at pos 2 is penalized (12*1.5=18), bonus is +10 -> 85 - 18 + 10 = 77
-        assert res.score == 77
+        start_base = kb.rules["rule_base"]["start"]
+        # Sugar at pos 2 is penalized (12*1.5=18), bonus is +10 -> start_base - 18 + 10
+        expected = round(start_base - 18 + 10)
+        assert res.score == expected
         assert len(res.caps_applied) == 0
 
 

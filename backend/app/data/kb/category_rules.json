@@ -11,7 +11,7 @@
     "4": 35
   },
   "rule_base": {
-    "start": 85,
+    "start": 80,
     "free_ingredient_count": 8,
     "per_extra_ingredient": 1,
     "complexity_max": 10,

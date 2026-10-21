@@ -1,7 +1,5 @@
 """
-routes.py - API route definitions.
-M0: only /api/health is implemented.
-M3: /api/analyze will be wired here.
+routes.py - API route definitions for NutriSnap (ARCHITECTURE §9).
 """
 from __future__ import annotations
 
@@ -11,7 +9,14 @@ from fastapi import APIRouter
 
 from app.config import settings
 from app.core.knowledge_base import KnowledgeBase
-from app.schemas import HealthFeatures, HealthResponse
+from app.core.ml.manager import get_model
+from app.core.scoring import analyze
+from app.schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    HealthFeatures,
+    HealthResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +35,15 @@ def set_knowledge_base(kb: KnowledgeBase) -> None:
 def health() -> HealthResponse:
     """
     Returns application health including ML status and feature flags.
-    ml_status is 'disabled' until M3 (no model loaded yet).
+    ml_status is one of: ready, loading, disabled, error.
     """
     kb_version = _kb.version if _kb else 0
     kb_entries = len(_kb.entries) if _kb else 0
+    model = get_model()
 
     return HealthResponse(
         status="ok",
-        ml_status="disabled",  # M3 will wire the real ML status
+        ml_status=model.status,
         backend=settings.nova_backend,
         kb_version=kb_version,
         kb_entries=kb_entries,
@@ -45,4 +51,18 @@ def health() -> HealthResponse:
             nutriscore=settings.feature_nutriscore,
             hindi_ml=settings.ml_hindi_supported,
         ),
+    )
+
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+def analyze_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
+    """
+    Analyze packaged food ingredients text.
+    Executes the full scoring lifecycle per ARCHITECTURE §4 and §9.2.
+    """
+    return analyze(
+        text=request.ingredients_text,
+        profile=request.profile,
+        force_mode=request.force_mode,
+        kb=_kb,
     )

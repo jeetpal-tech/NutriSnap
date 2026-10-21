@@ -1,5 +1,5 @@
 """
-sample_scores_m2.py - Generate 5 sample scores with penalty breakdown tables (Milestone M2).
+sample_scores_m2.py - Generate 6 sample scores with penalty breakdown tables (Milestone M2).
 
 Products tested (generic, no brand names):
 1. Instant-noodle-like
@@ -7,6 +7,7 @@ Products tested (generic, no brand names):
 3. Plain oats
 4. Chips-like
 5. Whole wheat atta
+6. Plain salted chips (Potato, Refined palm oil, Salt)
 """
 import sys
 from pathlib import Path
@@ -40,6 +41,10 @@ SAMPLES = [
     {
         "category": "Whole wheat atta",
         "text": "Whole wheat flour (100%)",
+    },
+    {
+        "category": "Potato, Refined palm oil, Salt",
+        "text": "Potato, Refined palm oil, Salt",
     },
 ]
 
