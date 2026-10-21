@@ -1,0 +1,22 @@
+[
+  {
+    "flag": "added_sugar",
+    "note": "WHO recommends keeping free sugars below 10% of total energy intake, with further benefit below 5%.",
+    "source": {"name": "WHO, Guideline: Sugars intake for adults and children (2015)", "url": "https://www.who.int/publications/i/item/9789241549028"}
+  },
+  {
+    "flag": "trans_fat_source",
+    "note": "WHO recommends limiting trans-fat intake to less than 1% of total energy intake.",
+    "source": {"name": "WHO, Saturated fatty acid and trans-fatty acid intake for adults and children (2023)", "url": "https://www.who.int/publications/i/item/9789240073135"}
+  },
+  {
+    "flag": "saturated_fat_source",
+    "note": "WHO recommends limiting saturated fat to less than 10% of total energy intake.",
+    "source": {"name": "WHO, Saturated fatty acid and trans-fatty acid intake for adults and children (2023)", "url": "https://www.who.int/publications/i/item/9789240073135"}
+  },
+  {
+    "flag": "sodium_source",
+    "note": "WHO recommends adults consume less than 2 g sodium per day (about 5 g salt).",
+    "source": {"name": "WHO, Guideline: Sodium intake for adults and children (2012)", "url": "https://www.who.int/publications/i/item/9789241504836"}
+  }
+]

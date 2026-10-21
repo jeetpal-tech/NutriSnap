@@ -1,0 +1,1 @@
+"""NutriSnap app package."""

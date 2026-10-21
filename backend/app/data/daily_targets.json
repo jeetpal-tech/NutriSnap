@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "default_profile": "who",
+  "energy_reference_kcal": 2000,
+  "profiles": {
+    "who": {
+      "label": "WHO-based general limits",
+      "enabled": true,
+      "targets": {
+        "free_sugars_g": {
+          "energy_fraction": 0.10,
+          "stretch_energy_fraction": 0.05,
+          "kcal_per_g": 4,
+          "source": "WHO, Guideline: Sugars intake for adults and children (2015)"
+        },
+        "saturated_fat_g": {
+          "energy_fraction": 0.10,
+          "kcal_per_g": 9,
+          "source": "WHO, Saturated fatty acid and trans-fatty acid intake for adults and children (2023)"
+        },
+        "trans_fat_g": {
+          "energy_fraction": 0.01,
+          "kcal_per_g": 9,
+          "source": "WHO, same 2023 guideline"
+        },
+        "sodium_mg": {
+          "value": 2000,
+          "source": "WHO, Guideline: Sodium intake for adults and children (2012)"
+        }
+      }
+    },
+    "icmr_nin_2024": {
+      "label": "ICMR-NIN Dietary Guidelines for Indians 2024 (owner to fill and verify)",
+      "enabled": false,
+      "targets": {}
+    }
+  }
+}

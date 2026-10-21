@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "bands": {
+    "high_risk_max": 39,
+    "moderate_max": 69
+  },
+  "nova_base": {
+    "1": 90,
+    "2": 75,
+    "3": 60,
+    "4": 35
+  },
+  "rule_base": {
+    "start": 85,
+    "free_ingredient_count": 8,
+    "per_extra_ingredient": 1,
+    "complexity_max": 10,
+    "per_unflagged_additive": 2,
+    "unflagged_additive_max": 10
+  },
+  "flags": {
+    "added_sugar":             {"penalty": 12, "position_weighted": true},
+    "refined_flour":           {"penalty": 8,  "position_weighted": true},
+    "saturated_fat_source":    {"penalty": 8,  "position_weighted": true},
+    "trans_fat_source":        {"penalty": 20, "position_weighted": false},
+    "sodium_source":           {"penalty": 3,  "position_weighted": false},
+    "flavour_enhancer":        {"penalty": 6,  "position_weighted": false},
+    "preservative":            {"penalty": 5,  "position_weighted": false},
+    "artificial_sweetener":    {"penalty": 6,  "position_weighted": false},
+    "synthetic_colour":        {"penalty": 5,  "position_weighted": false},
+    "emulsifier_stabiliser":   {"penalty": 3,  "position_weighted": false},
+    "flavour_additive":        {"penalty": 3,  "position_weighted": false},
+    "ultra_processing_marker": {"penalty": 6,  "position_weighted": false}
+  },
+  "position_multiplier": {
+    "1-3": 1.5,
+    "4-6": 1.0,
+    "7+":  0.7
+  },
+  "sugar_splitting_extra_penalty": 4,
+  "penalty_cap": 70,
+  "bonus": {
+    "whole_grain_or_fibre": 4,
+    "legume_nut_seed": 3,
+    "cap": 10
+  },
+  "ml_penalty_scale": 0.6,
+  "nova_markers": [
+    "flavour_enhancer",
+    "artificial_sweetener",
+    "synthetic_colour",
+    "emulsifier_stabiliser",
+    "flavour_additive",
+    "ultra_processing_marker",
+    "trans_fat_source"
+  ],
+  "profile_multipliers": {
+    "diabetes":         {"added_sugar": 1.5, "refined_flour": 1.5, "ultra_processing_marker": 1.5},
+    "hypertension":     {"sodium_source": 1.5, "flavour_enhancer": 1.5, "preservative": 1.5},
+    "high_cholesterol": {"saturated_fat_source": 1.5, "trans_fat_source": 1.5}
+  },
+  "safety_caps": [
+    {"if_flag_present": "trans_fat_source", "max_score": 69},
+    {"if_flag_at_position_le": {"flag": "added_sugar", "position": 1}, "max_score": 69}
+  ]
+}
