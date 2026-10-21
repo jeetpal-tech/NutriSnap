@@ -732,21 +732,5 @@
     "swap_tip": null,
     "source": null,
     "verified": false
-  },
-  {
-    "id": "sodium_bicarbonate",
-    "canonical": "Sodium bicarbonate",
-    "aliases": [
-      "sodium bicarbonate", "baking soda", "raising agent", "bicarbonate of soda",
-      "sodium hydrogen carbonate"
-    ],
-    "ins": ["500ii", "500(ii)"],
-    "primary_flag": "sodium_source",
-    "category": "additive",
-    "explanation": null,
-    "condition_notes": {},
-    "swap_tip": null,
-    "source": null,
-    "verified": false
   }
 ]
