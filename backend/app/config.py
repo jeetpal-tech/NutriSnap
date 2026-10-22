@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     nova_backend: Literal["hf_hsilvosa", "minilm_head"] = "minilm_head"
     nova_model_dir: str = "backend/models/minilm-head"
     nova_model_revision: str = "f252e3546650954596ff7e5926aab4559c433909"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash"
 
     # ── Gate thresholds ────────────────────────────────────────────────────
     ml_timeout_s: float = 3.0
