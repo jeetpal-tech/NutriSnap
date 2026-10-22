@@ -6,11 +6,14 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter
+from fastapi import Query
 
 from app.config import settings
 from app.core.knowledge_base import KnowledgeBase
 from app.core.ml.manager import get_model
 from app.core.scoring import analyze
+from app.core.database import demo_queries, history, record_scan, stats
+from app.core.parser import parse
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -60,9 +63,27 @@ def analyze_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
     Analyze packaged food ingredients text.
     Executes the full scoring lifecycle per ARCHITECTURE §4 and §9.2.
     """
-    return analyze(
+    result = analyze(
         text=request.ingredients_text,
         profile=request.profile,
         force_mode=request.force_mode,
         kb=_kb,
     )
+    if result.status == "ok":
+        record_scan(result, parse(request.ingredients_text))
+    return result
+
+
+@router.get("/history")
+def history_endpoint(limit: int = Query(default=50, ge=1, le=100)):
+    return {"items": history(limit)}
+
+
+@router.get("/stats")
+def stats_endpoint():
+    return stats()
+
+
+@router.get("/queries")
+def queries_endpoint():
+    return {"queries": demo_queries()}

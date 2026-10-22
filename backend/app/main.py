@@ -22,6 +22,7 @@ from app.api.routes import router, set_knowledge_base
 from app.config import settings
 from app.core.knowledge_base import KnowledgeBase
 from app.core.ml.manager import init_background_model_loader
+from app.core.database import seed as seed_database
 
 logging.basicConfig(
     level=settings.log_level.upper(),
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     kb = KnowledgeBase()
     kb.load()
     set_knowledge_base(kb)
+    seed_database(kb)
     logger.info(
         "Knowledge base loaded: %d entries (version %d)",
         len(kb.entries),
