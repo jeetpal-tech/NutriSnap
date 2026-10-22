@@ -372,7 +372,7 @@ def test_api_schema_and_health_via_testclient(kb, reset_model):
     h_data = h_resp.json()
     assert h_data["status"] == "ok"
     assert h_data["ml_status"] == "ready"
-    assert h_data["backend"] == "hf_hsilvosa"
+    assert h_data["backend"] == "minilm_head"
     assert "features" in h_data
 
     # 2. Analyze check

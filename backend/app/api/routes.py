@@ -43,10 +43,15 @@ def health() -> HealthResponse:
     kb_version = _kb.version if _kb else 0
     kb_entries = len(_kb.entries) if _kb else 0
     model = get_model()
+    ml_status = model.status
+    ml_error = getattr(model, "error_reason", None)
+    if ml_status == "error" and ml_error == "selftest_failed":
+        ml_status = "error: selftest_failed"
 
     return HealthResponse(
         status="ok",
-        ml_status=model.status,
+        ml_status=ml_status,
+        ml_error=ml_error,
         backend=settings.nova_backend,
         kb_version=kb_version,
         kb_entries=kb_entries,

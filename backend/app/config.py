@@ -22,9 +22,9 @@ class Settings(BaseSettings):
     )
 
     # ── ML feature switches ────────────────────────────────────────────────
-    ml_enabled: bool = False
-    nova_backend: Literal["hf_hsilvosa", "minilm_head"] = "hf_hsilvosa"
-    nova_model_dir: str = "backend/models/hsilvosa-nova"
+    ml_enabled: bool = True
+    nova_backend: Literal["hf_hsilvosa", "minilm_head"] = "minilm_head"
+    nova_model_dir: str = "backend/models/minilm-head"
     nova_model_revision: str = "f252e3546650954596ff7e5926aab4559c433909"
 
     # ── Gate thresholds ────────────────────────────────────────────────────

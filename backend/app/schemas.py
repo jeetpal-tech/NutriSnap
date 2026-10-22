@@ -163,7 +163,8 @@ class HealthFeatures(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-    ml_status: Literal["ready", "loading", "disabled", "error"]
+    ml_status: str
+    ml_error: str | None = None
     backend: str
     kb_version: int
     kb_entries: int
