@@ -373,6 +373,7 @@ def test_api_schema_and_health_via_testclient(kb, reset_model):
     assert h_data["status"] == "ok"
     assert h_data["ml_status"] == "ready"
     assert h_data["backend"] == "minilm_head"
+    assert h_data["gemini_status"] in ["configured", "missing_key"]
     assert "features" in h_data
 
     # 2. Analyze check

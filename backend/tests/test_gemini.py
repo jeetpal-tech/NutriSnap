@@ -4,6 +4,8 @@ from uuid import uuid4
 from app.config import settings
 from app.core import gemini
 from app.core.database import connect, initialize
+from fastapi.testclient import TestClient
+from app.main import app
 
 
 def temp_db():
@@ -48,3 +50,16 @@ def test_gemini_failure_degrades_and_image_extraction_is_bounded(monkeypatch):
     monkeypatch.setattr(gemini, "_request_json", lambda *a, **k: {"found":True,"ingredients_text":"x"*4001,"language":"en","confidence":0.8})
     assert gemini.extract_ingredients(b"image", "image/jpeg") is None
     path.unlink(missing_ok=True)
+
+
+def test_scan_image_uses_mocked_ocr_and_rejects_over_limit(monkeypatch):
+    monkeypatch.setattr(settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(gemini, "extract_ingredients", lambda image, mime: {"found":True,"ingredients_text":"oats, salt","language":"en","confidence":0.9,"ai_generated":True})
+    monkeypatch.setattr("app.api.routes.record_scan", lambda *a, **k: None)
+    client = TestClient(app)
+    response = client.post("/api/scan-image", files={"file":("label.jpg", b"jpeg-data", "image/jpeg")})
+    assert response.status_code == 200
+    assert response.json()["source"] == "camera"
+    assert response.json()["detected_text"] == "oats, salt"
+    too_large = client.post("/api/scan-image", files={"file":("large.jpg", b"x" * (5 * 1024 * 1024 + 1), "image/jpeg")})
+    assert too_large.status_code == 413

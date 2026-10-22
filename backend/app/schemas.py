@@ -152,6 +152,10 @@ class AnalyzeResponse(BaseModel):
     disclaimer: str | None = None
     attribution: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    source: Literal["camera", "paste"] | None = None
+    detected_text: str | None = None
+    ingredient_info: list[dict[str, Any]] = Field(default_factory=list)
+    alternatives: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ── Health response ────────────────────────────────────────────────────────────
@@ -165,6 +169,7 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     ml_status: str
     ml_error: str | None = None
+    gemini_status: Literal["configured", "missing_key"] = "missing_key"
     backend: str
     kb_version: int
     kb_entries: int

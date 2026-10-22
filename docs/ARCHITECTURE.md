@@ -306,9 +306,9 @@ Base path `/api`. JSON. CORS limited to `CORS_ORIGINS`.
 
 ### 9.1 `GET /api/health`
 ```json
-{"status": "ok", "ml_status": "ready", "backend": "hf_hsilvosa", "kb_version": 1, "kb_entries": 42, "features": {"nutriscore": false, "hindi_ml": false}}
+{"status": "ok", "ml_status": "ready", "ml_error": null, "gemini_status": "configured", "backend": "minilm_head", "kb_version": 1, "kb_entries": 42, "features": {"nutriscore": false, "hindi_ml": false}}
 ```
-`ml_status` is one of `ready`, `loading`, `disabled`, `error`.
+`ml_status` is `ready`, `loading`, `disabled`, `error`, or `error: selftest_failed`. `gemini_status` is `configured` or `missing_key`.
 
 ### 9.2 `POST /api/analyze`
 Request:
@@ -376,7 +376,14 @@ Non-"ok" statuses (HTTP 200, no score):
 {"status": "not_food_text", "message": "This does not look like an ingredient list.", "scoring_method": null}
 ```
 
-### 9.3 Errors
+### 9.3 Optional Gemini and image scan endpoints
+
+- `POST /api/scan-image` accepts `multipart/form-data` with a `file` image field, maximum 5 MB. The backend reads and processes bytes in memory, never writes an image file, and never logs OCR text. Gemini copies the printed ingredients exactly; if OCR is unavailable, the response is `{ "status": "ocr_unavailable", "source": "camera", "message": "..." }` and the client can offer paste input. A successful response runs the same `/api/analyze` scorer and adds `source: "camera"`, `detected_text`, per-ingredient `ingredient_info`, and generic `alternatives`.
+- `POST /api/analyze` adds `source: "paste"`, `ingredient_info`, and `alternatives` to the existing response. Gemini summaries are labeled `ai_generated: true`; owner-authored KB content takes precedence. Gemini output never changes score or flags.
+- `GET /api/health` includes `gemini_status: "configured" | "missing_key"` and may expose `ml_status: "error: selftest_failed"` with `ml_error: "selftest_failed"` when the MiniLM smoke set fails.
+- Gemini uses `GEMINI_MODEL` (default `gemini-3.5-flash`), a backend-only `GEMINI_API_KEY`, JSON-schema output, and a 20-second timeout. Provider errors degrade the optional feature and never produce HTTP 500.
+
+### 9.4 Errors
 HTTP 422 validation, HTTP 500 `{"detail": "internal_error"}` (never leak stack traces). An ML exception must **never** produce a 500; it becomes a rule-based response with `fallback_reason: "model_error"`.
 
 ## 10. Frontend architecture
