@@ -80,15 +80,20 @@ def _scan_text(text: str, source: str, profile=None, force_mode: str = "auto", d
     result.source = source
     result.detected_text = detected_text
     if result.status == "ok":
-        names = [item.canonical or item.name for item in result.ingredients]
+        tokens = parse(text)
+        names = [token.raw for token in tokens]
+        fallback_names = [item.canonical or item.name for item in result.ingredients]
         try:
-            result.ingredient_info = gemini.ingredient_info(names, kb=_kb)
-            result.alternatives = gemini.alternatives([f.flag for f in result.flags], result.score or 0)
+            enrichment = gemini.analyze_ingredient_list(text, names, fallback_names=fallback_names, kb=_kb)
+            result.ingredient_info = enrichment["ingredient_info"]
+            result.alternatives = enrichment["alternatives"]
+            result.ingredient_analysis_source = enrichment["source"]
         except Exception:
             # Enrichment is optional and must never affect the score or response availability.
             result.ingredient_info = []
             result.alternatives = []
-        record_scan(result, parse(text), source=source)
+            result.ingredient_analysis_source = "unavailable"
+        record_scan(result, tokens, source=source)
     return result
 
 

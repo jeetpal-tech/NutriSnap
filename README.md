@@ -1,6 +1,6 @@
 # NutriSnap
 
-NutriSnap reviews packaged-food ingredient labels. It combines a transparent ingredient-rule score with NOVA processing information, optional Gemini label reading and ingredient explanations, and a local SQLite history. It is a demo, not medical advice.
+NutriSnap reviews packaged-food ingredient labels. It combines a transparent ingredient-rule score with NOVA processing information, Gemini-first ingredient review when configured, and a local SQLite history. It is a demo, not medical advice.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ npm --prefix frontend install
 Copy-Item backend\.env.example backend\.env
 ```
 
-Edit `backend\.env` and set `GEMINI_API_KEY` for photo OCR and generated ingredient information. Keep this key in the ignored `.env` file; never commit it. `GEMINI_MODEL` defaults to `gemini-3.5-flash`. Without a key, text scoring and history work; Gemini-dependent enrichment is unavailable.
+Edit `backend\.env` and set `GEMINI_API_KEY` for photo OCR and generated ingredient information. Keep this key in the ignored `.env` file; never commit it. `GEMINI_MODEL` defaults to `gemini-3.5-flash`. Without a key, text scoring and history still work, with matching database notes used as the enrichment fallback; photo OCR is unavailable.
 
 Start both servers with one command from the project root:
 
@@ -71,16 +71,16 @@ Restart the API and check `/api/health`. The adapter runs its 12-example startup
 
 ## Gemini and privacy
 
-Set `GEMINI_API_KEY` only in `backend/.env`. Gemini is used for exact ingredient text extraction from images, summaries for ingredients missing from the owner knowledge base, and generic alternatives. It never changes the score. Provider failures fall back safely and do not return HTTP 500. Image bytes and full pasted text are not stored in history; saved results retain a redacted review for reopening. Scans and generated cache entries stay in the local SQLite file.
+Set `GEMINI_API_KEY` only in `backend/.env`. Every valid pasted or OCR-read ingredient list is sent as a whole to Gemini for ingredient identification, low/medium/high general health-risk levels, and three generic alternatives. The UI identifies whether these insights came from Gemini or a database fallback. The app consults owner knowledge-base notes and saved cache entries for enrichment only when Gemini is unavailable, fails, or returns an incomplete analysis. Gemini never changes the numeric score, which remains rule-based. Provider failures never return HTTP 500. Image bytes and full pasted text are not stored in scan history; saved results retain a redacted review for reopening.
 
-Pre-generate summary cache entries for knowledge-base ingredients and any owner-supplied golden products:
+Pre-generate database fallback notes for knowledge-base ingredients and any owner-supplied golden products:
 
 ```powershell
 Set-Location backend
 .\.venv\Scripts\python.exe scripts\warm_cache.py
 ```
 
-This requires `GEMINI_API_KEY`; if it is missing, the script exits without making network requests. Only add real, owner-supplied ingredient lists to `app/data/golden/golden_products.json`; do not invent branded product data.
+This requires `GEMINI_API_KEY`; if it is missing, the script exits without making network requests. These cached notes are used only when a live full-list analysis fails. Only add real, owner-supplied ingredient lists to `app/data/golden/golden_products.json`; do not invent branded product data.
 
 ## Tests and demo data
 

@@ -17,6 +17,7 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 _EXTRACT_SCHEMA = {"type":"OBJECT","properties":{"found":{"type":"BOOLEAN"},"ingredients_text":{"type":"STRING"},"language":{"type":"STRING"},"confidence":{"type":"NUMBER"}},"required":["found","ingredients_text","language","confidence"]}
 _INFO_SCHEMA = {"type":"OBJECT","properties":{"items":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"name":{"type":"STRING"},"what_it_is":{"type":"STRING"},"health_note":{"type":"STRING"},"concern_level":{"type":"STRING","enum":["none","low","medium","high"]}},"required":["name","what_it_is","health_note","concern_level"]}}},"required":["items"]}
 _ALTERNATIVE_SCHEMA = {"type":"OBJECT","properties":{"alternatives":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING"},"reason":{"type":"STRING"}},"required":["type","reason"]}}},"required":["alternatives"]}
+_FULL_ANALYSIS_SCHEMA = {"type":"OBJECT","properties":{"items":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"name":{"type":"STRING"},"what_it_is":{"type":"STRING"},"health_note":{"type":"STRING"},"risk_level":{"type":"STRING","enum":["low","medium","high"]}},"required":["name","what_it_is","health_note","risk_level"]}},"alternatives":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"type":{"type":"STRING"},"reason":{"type":"STRING"}},"required":["type","reason"]}}},"required":["items","alternatives"]}
 
 def _request_json(prompt: str, schema: dict[str, Any], image_bytes: bytes | None = None, mime: str | None = None) -> dict[str, Any] | None:
     key = settings.gemini_api_key.strip()
@@ -28,7 +29,7 @@ def _request_json(prompt: str, schema: dict[str, Any], image_bytes: bytes | None
     body = {"contents":[{"role":"user","parts":parts}],"generationConfig":{"responseMimeType":"application/json","responseSchema":schema}}
     url = f"{BASE_URL}/{settings.gemini_model}:generateContent"
     try:
-        response = httpx.post(url, params={"key": key}, json=body, timeout=TIMEOUT_SECONDS)
+        response = httpx.post(url, headers={"x-goog-api-key": key}, json=body, timeout=TIMEOUT_SECONDS)
         response.raise_for_status()
         parsed = json.loads(response.json()["candidates"][0]["content"]["parts"][0]["text"])
         return parsed if isinstance(parsed, dict) else None
@@ -66,6 +67,107 @@ def _owner_info(name: str, kb: Any) -> dict[str, Any] | None:
                 "concern_level":entry.get("concern_level","none"),"source":"owner","model":None,
                 "verified":bool(entry.get("verified")),"ai_generated":False}
     return None
+
+def _list_cache_key(names: list[str]) -> str:
+    normalized = sorted(normalize_cache_name(name) for name in names if name.strip())
+    return hashlib.sha256(json.dumps(normalized, ensure_ascii=False).encode()).hexdigest()
+
+def _database_fallback(names: list[str], fallback_names: list[str], kb: Any, path: Path | str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read owner/SQLite notes only after the full-list Gemini request fails."""
+    output: list[dict[str, Any]] = []
+    lookup_names = fallback_names if len(fallback_names) == len(names) else names
+    try:
+        cached = cached_ingredient_info(lookup_names, path)
+    except Exception:
+        cached = {}
+    for requested, lookup in zip(names, lookup_names):
+        row = _owner_info(lookup, kb)
+        if row is None:
+            cached_row = cached.get(normalize_cache_name(lookup))
+            if cached_row:
+                row = {"name":requested,"what_it_is":cached_row["what_it_is"],"health_note":cached_row["health_note"],
+                       "concern_level":cached_row["concern_level"],"risk_level":cached_row["concern_level"],
+                       "original_source":cached_row["source"],"model":cached_row["model"],
+                       "verified":bool(cached_row["verified"]),"ai_generated":cached_row["source"] == "gemini"}
+        if row:
+            row = {**row,"name":requested,"source":"database_fallback"}
+            risk = row.get("risk_level", row.get("concern_level", "low"))
+            row["risk_level"] = risk if risk in {"low", "medium", "high"} else "low"
+            row["concern_level"] = row["risk_level"]
+            output.append(row)
+    alternatives: list[dict[str, Any]] = []
+    try:
+        cached_alt = cached_alternatives(_list_cache_key(names), path)
+        if cached_alt:
+            alternatives = json.loads(cached_alt["content_json"])
+            alternatives = [{**item,"source":"database_fallback"} for item in alternatives if isinstance(item, dict)]
+    except Exception:
+        pass
+    return output, alternatives
+
+def analyze_ingredient_list(ingredients_text: str, names: list[str], *, fallback_names: list[str] | None = None,
+                            kb: Any = None, path: Path | str = DB_PATH) -> dict[str, Any]:
+    """Ask Gemini about the complete submitted list first; consult SQLite only on failure."""
+    requested = [name.strip() for name in names if name and name.strip()]
+    fallback_names = fallback_names or requested
+    if requested and settings.gemini_api_key.strip():
+        prompt = (
+            "Analyze the complete ingredient list below. Identify each listed ingredient and return exactly one item for every "
+            "distinct token, preserving its exact token name. For each, provide a short plain-language identification and a "
+            "cautious general health note, then set risk_level to low, medium, or high for typical dietary use. Consider that "
+            "risk depends on amount, frequency, and individual context; do not call an ingredient toxic without evidence, "
+            "do not give medical advice, and do not infer quantities or product facts. Suggest exactly three generic food-type "
+            "alternatives that address the ingredient list's overall concerns, with one cautious sentence each and no brand names. "
+            "Return empty alternatives only if the input is not a food ingredient list.\n"
+            + json.dumps({"ingredients_text": ingredients_text, "ingredient_tokens": requested}, ensure_ascii=False)
+        )
+        try:
+            data = _request_json(prompt, _FULL_ANALYSIS_SCHEMA)
+        except Exception:
+            data = None
+        if data:
+            try:
+                allowed = {normalize_cache_name(name): name for name in requested}
+                generated: dict[str, dict[str, Any]] = {}
+                for item in data["items"]:
+                    if not isinstance(item, dict):
+                        raise ValueError("Invalid Gemini ingredient item")
+                    key = normalize_cache_name(str(item.get("name", "")))
+                    level = item.get("risk_level")
+                    if key not in allowed or key in generated or level not in {"low", "medium", "high"}:
+                        raise ValueError("Gemini response did not match ingredient tokens")
+                    row = {"name":allowed[key],"what_it_is":" ".join(str(item.get("what_it_is", "")).split()[:20]),
+                           "health_note":" ".join(str(item.get("health_note", "")).split()[:40]),"risk_level":level,
+                           "concern_level":level,"source":"gemini","model":settings.gemini_model,"verified":False,"ai_generated":True}
+                    if not row["what_it_is"] or not row["health_note"]:
+                        raise ValueError("Gemini response omitted an explanation")
+                    generated[key] = row
+                if set(generated) != set(allowed):
+                    raise ValueError("Gemini response omitted ingredients")
+                raw_alternatives = data["alternatives"]
+                if len(raw_alternatives) != 3:
+                    raise ValueError("Gemini response must contain three alternatives")
+                clean_alternatives = []
+                for item in raw_alternatives:
+                    if not isinstance(item, dict):
+                        raise ValueError("Invalid Gemini alternative")
+                    alternative = {"type":" ".join(str(item.get("type", "")).split()[:12]),
+                                   "reason":" ".join(str(item.get("reason", "")).split()[:30]),
+                                   "ai_generated":True,"source":"gemini"}
+                    if not alternative["type"] or not alternative["reason"]:
+                        raise ValueError("Gemini response omitted an alternative explanation")
+                    clean_alternatives.append(alternative)
+                info = list(generated.values())
+                try:
+                    save_ingredient_info(info, settings.gemini_model, path)
+                    save_alternatives(_list_cache_key(requested), clean_alternatives, settings.gemini_model, path)
+                except Exception:
+                    pass
+                return {"ingredient_info":info,"alternatives":clean_alternatives,"source":"gemini"}
+            except (KeyError, TypeError, ValueError):
+                pass
+    info, alternatives = _database_fallback(requested, fallback_names, kb, path)
+    return {"ingredient_info":info,"alternatives":alternatives,"source":"database_fallback"}
 
 def ingredient_info(names: list[str], kb: Any = None, path: Path | str = DB_PATH) -> list[dict[str, Any]]:
     requested = list(dict.fromkeys(n.strip() for n in names if n and n.strip()))

@@ -155,6 +155,7 @@ class AnalyzeResponse(BaseModel):
     source: Literal["camera", "paste"] | None = None
     detected_text: str | None = None
     ingredient_info: list[dict[str, Any]] = Field(default_factory=list)
+    ingredient_analysis_source: Literal["gemini", "database_fallback", "unavailable"] | None = None
     alternatives: list[dict[str, Any]] = Field(default_factory=list)
 
 
