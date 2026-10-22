@@ -7,7 +7,7 @@
 - Phase B complete: Gemini JSON-schema service for OCR text, ingredient summaries, and alternatives; SQLite cache, owner-KB override, 20-second timeout, no credential/prompt logging. Mock tests do not use the network.
 - Phase C complete: `/api/scan-image` accepts in-memory multipart images up to 5 MB; OCR and paste share the scoring pipeline; responses add source, detected text, summaries, alternatives; health reports Gemini configuration.
 - Phase D complete: scan source check, redacted result JSON, reserved null user_id, WAL/FK per connection, IST history, migrations, 16 queries plus EXPLAIN plan, SQLite rationale/normalization/privacy docs.
-- Phases E–F remain in progress.
+- Phase E complete: camera-first scan with capture/upload and 1280 px JPEG resizing, paste mode, progress, editable OCR text, concern-sorted ingredient detail, AI labels, alternatives, searchable local-time history, and live database explorer.
 
 ## Components
 - Backend: `backend/app/core/` parser, matcher, rules, scoring, gate, SQLite layer, Gemini service, and model adapters.
@@ -25,10 +25,10 @@
 
 ## Verification
 - Latest backend: 129 passed, 1 skipped (NumPy unavailable), 1 warning.
-- Frontend before current change: `npm run build` succeeds.
+- Frontend Phase E: `npm run build` succeeds (Vite production bundle).
 - `eval_golden.py` handles empty and populated owner-supplied JSON; current golden set is empty.
 - `init_db.py` and `demo_queries.py` run from `backend`.
-- Visual check at 360 px and 1280 px is pending because this environment exposes no browser tool or Chrome/Edge executable.
+- Visual check at 360 px and 1280 px remains pending because this environment exposes no browser tool or Chrome/Edge executable.
 
 ## Model files and activation
 - Head files are local/ignored: `backend/models/minilm-head/head.npz` and `head_config.json`; encoder target: `backend/models/minilm-encoder/`.
