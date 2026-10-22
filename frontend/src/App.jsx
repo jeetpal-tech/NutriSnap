@@ -1,3 +1,4 @@
+import React from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { Activity, AlertCircle, ArrowLeft, ArrowRight, Camera, Check, ChevronDown, ChevronUp, ClipboardPaste, Clock3, Database, FileImage, History, Leaf, LoaderCircle, Search, ShieldCheck, Sparkles, Upload } from 'lucide-react'
