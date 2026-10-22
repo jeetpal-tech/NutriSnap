@@ -22,3 +22,11 @@ SELECT i.canonical,count(a.id) AS aliases FROM ingredient i LEFT JOIN ingredient
 SELECT count(*) AS unverified_ingredients FROM ingredient WHERE verified=0;
 -- QUERY: Scan totals by month
 SELECT substr(created_at,1,7) AS month,count(*) AS scans,round(avg(score),1) AS average_score FROM scan GROUP BY month ORDER BY month DESC;
+-- QUERY: Scans per day
+SELECT date(created_at) AS scan_date,count(*) AS scans FROM scan GROUP BY date(created_at) ORDER BY scan_date DESC;
+-- QUERY: Most scanned ingredients with concern level
+SELECT i.canonical,ii.concern_level,count(*) AS appearances FROM scan_ingredient si JOIN ingredient i ON i.id=si.ingredient_id LEFT JOIN ingredient_info ii ON ii.name_norm=lower(trim(i.canonical)) GROUP BY i.id,ii.concern_level ORDER BY appearances DESC LIMIT 10;
+-- QUERY: Cache hits by source
+SELECT source,sum(hit_count) AS cache_hits FROM (SELECT source,hit_count FROM ingredient_info UNION ALL SELECT source,hit_count FROM alternative_cache) GROUP BY source ORDER BY cache_hits DESC;
+-- QUERY: Best score per day (CTE and window function)
+WITH daily AS (SELECT date(created_at) AS scan_date,id,score,band,row_number() OVER(PARTITION BY date(created_at) ORDER BY score DESC) AS rank FROM scan) SELECT scan_date,id,score,band FROM daily WHERE rank=1 ORDER BY scan_date DESC;

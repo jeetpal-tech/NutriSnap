@@ -6,7 +6,8 @@
 - Phase A runtime validation is blocked: PyPI transfers repeatedly timed out while downloading NumPy (26 KB/s); CPU torch and encoder download were not reached. Synthetic head test is present but skipped without NumPy.
 - Phase B complete: Gemini JSON-schema service for OCR text, ingredient summaries, and alternatives; SQLite cache, owner-KB override, 20-second timeout, no credential/prompt logging. Mock tests do not use the network.
 - Phase C complete: `/api/scan-image` accepts in-memory multipart images up to 5 MB; OCR and paste share the scoring pipeline; responses add source, detected text, summaries, alternatives; health reports Gemini configuration.
-- Phases D–F remain in progress.
+- Phase D complete: scan source check, redacted result JSON, reserved null user_id, WAL/FK per connection, IST history, migrations, 16 queries plus EXPLAIN plan, SQLite rationale/normalization/privacy docs.
+- Phases E–F remain in progress.
 
 ## Components
 - Backend: `backend/app/core/` parser, matcher, rules, scoring, gate, SQLite layer, Gemini service, and model adapters.
@@ -23,7 +24,7 @@
 - Run UI alone from `frontend`: `npm run dev`; configure API with `VITE_API_URL` in `.env`.
 
 ## Verification
-- Latest backend: 127 passed, 1 skipped (NumPy unavailable), 1 warning.
+- Latest backend: 129 passed, 1 skipped (NumPy unavailable), 1 warning.
 - Frontend before current change: `npm run build` succeeds.
 - `eval_golden.py` handles empty and populated owner-supplied JSON; current golden set is empty.
 - `init_db.py` and `demo_queries.py` run from `backend`.

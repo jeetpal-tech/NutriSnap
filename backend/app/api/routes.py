@@ -88,7 +88,7 @@ def _scan_text(text: str, source: str, profile=None, force_mode: str = "auto", d
             # Enrichment is optional and must never affect the score or response availability.
             result.ingredient_info = []
             result.alternatives = []
-        record_scan(result, parse(text))
+        record_scan(result, parse(text), source=source)
     return result
 
 

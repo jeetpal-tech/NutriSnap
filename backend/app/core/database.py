@@ -15,7 +15,7 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS ingredient(id TEXT PRIMARY KEY, canonical TEXT NOT NULL, category TEXT, primary_flag TEXT, verified INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS ingredient_alias(id INTEGER PRIMARY KEY, ingredient_id TEXT NOT NULL REFERENCES ingredient(id), alias TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('name','ins')), UNIQUE(ingredient_id,alias));
 CREATE TABLE IF NOT EXISTS flag_rule(flag TEXT PRIMARY KEY, penalty REAL NOT NULL, position_weighted INTEGER NOT NULL, is_bonus INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS scan(id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, score INTEGER NOT NULL, band TEXT NOT NULL, scoring_method TEXT NOT NULL, fallback_reason TEXT, nova_top INTEGER, nova_confidence REAL, rule_score INTEGER, ml_score INTEGER, kb_coverage REAL NOT NULL, n_tokens INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS scan(id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, score INTEGER NOT NULL, band TEXT NOT NULL, scoring_method TEXT NOT NULL, fallback_reason TEXT, nova_top INTEGER, nova_confidence REAL, rule_score INTEGER, ml_score INTEGER, kb_coverage REAL NOT NULL, n_tokens INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'paste' CHECK(source IN ('camera','paste')), result_json TEXT, user_id INTEGER NULL);
 CREATE TABLE IF NOT EXISTS scan_ingredient(id INTEGER PRIMARY KEY, scan_id INTEGER NOT NULL REFERENCES scan(id) ON DELETE CASCADE, position INTEGER NOT NULL, raw_name TEXT NOT NULL, ingredient_id TEXT REFERENCES ingredient(id), flag TEXT, points REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS ingredient_info(name_norm TEXT PRIMARY KEY, what_it_is TEXT NOT NULL, health_note TEXT NOT NULL, concern_level TEXT NOT NULL CHECK(concern_level IN ('none','low','medium','high')), source TEXT NOT NULL CHECK(source IN ('owner','gemini')), model TEXT, generated_at TEXT NOT NULL, hit_count INTEGER NOT NULL DEFAULT 0, verified INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS alternative_cache(cache_key TEXT PRIMARY KEY, content_json TEXT NOT NULL, source TEXT NOT NULL, model TEXT, generated_at TEXT NOT NULL, hit_count INTEGER NOT NULL DEFAULT 0, verified INTEGER NOT NULL DEFAULT 0);
@@ -34,6 +34,7 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(path, timeout=2)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 @contextmanager
@@ -51,6 +52,13 @@ def session(path: Path | str = DB_PATH):
 def initialize(path: Path | str = DB_PATH) -> None:
     with session(path) as db:
         db.executescript(SCHEMA)
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(scan)")}
+        if "source" not in columns:
+            db.execute("ALTER TABLE scan ADD COLUMN source TEXT NOT NULL DEFAULT 'paste' CHECK(source IN ('camera','paste'))")
+        if "result_json" not in columns:
+            db.execute("ALTER TABLE scan ADD COLUMN result_json TEXT")
+        if "user_id" not in columns:
+            db.execute("ALTER TABLE scan ADD COLUMN user_id INTEGER NULL")
 
 def seed(kb: Any, path: Path | str = DB_PATH) -> None:
     initialize(path)
@@ -68,27 +76,36 @@ def seed(kb: Any, path: Path | str = DB_PATH) -> None:
             if flag != "cap":
                 db.execute("INSERT OR REPLACE INTO flag_rule VALUES(?,?,0,1)", (flag, penalty))
 
-def record_scan(result: Any, tokens: list[Any], path: Path | str = DB_PATH) -> None:
+def record_scan(result: Any, tokens: list[Any], path: Path | str = DB_PATH, *, source: str = "paste") -> None:
     if result.status != "ok" or result.score is None:
         return
     try:
         with session(path) as db:
             nova = result.nova
-            cur = db.execute("INSERT INTO scan(created_at,score,band,scoring_method,fallback_reason,nova_top,nova_confidence,rule_score,ml_score,kb_coverage,n_tokens) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (datetime.now(timezone.utc).isoformat(), result.score, result.band, result.scoring_method, result.fallback_reason, nova.top if nova else None, nova.confidence if nova else None, result.rule_score, result.ml_score, result.kb_coverage or 0, len(tokens)))
+            review = result.model_dump(mode="json")
+            review.pop("detected_text", None)
+            review["source"] = source
+            cur = db.execute("INSERT INTO scan(created_at,score,band,scoring_method,fallback_reason,nova_top,nova_confidence,rule_score,ml_score,kb_coverage,n_tokens,source,result_json,user_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)", (datetime.now(timezone.utc).isoformat(), result.score, result.band, result.scoring_method, result.fallback_reason, nova.top if nova else None, nova.confidence if nova else None, result.rule_score, result.ml_score, result.kb_coverage or 0, len(tokens), source, json.dumps(review, ensure_ascii=False)))
             scan_id = cur.lastrowid
             for ing in result.ingredients:
                 db.execute("INSERT INTO scan_ingredient(scan_id,position,raw_name,ingredient_id,flag,points) VALUES(?,?,?,?,?,?)", (scan_id, ing.position, ing.name, ing.kb_id if ing.matched else None, ing.flag, ing.points))
-    except (sqlite3.Error, OSError):
+    except (sqlite3.Error, OSError, TypeError, ValueError):
         # Persistence is best effort; scoring and the HTTP response remain available.
         return
 
 def history(limit: int = 50, path: Path | str = DB_PATH) -> list[dict[str, Any]]:
     with session(path) as db:
-        return [dict(row) for row in db.execute("SELECT id,created_at,score,band,scoring_method,fallback_reason,kb_coverage,n_tokens FROM scan ORDER BY id DESC LIMIT ?", (max(1,min(limit,100)),))]
+        items = []
+        rows = db.execute("SELECT id,created_at,datetime(created_at,'+5 hours','+30 minutes') AS created_at_local,score,band,scoring_method,fallback_reason,kb_coverage,n_tokens,source,result_json FROM scan ORDER BY id DESC LIMIT ?", (max(1,min(limit,100)),))
+        for row in rows:
+            item = dict(row)
+            item["result"] = json.loads(item.pop("result_json")) if item.get("result_json") else None
+            items.append(item)
+        return items
 
 def stats(path: Path | str = DB_PATH) -> dict[str, Any]:
     with session(path) as db:
-        return {"scans": db.execute("SELECT count(*) FROM scan").fetchone()[0], "ingredients": db.execute("SELECT count(*) FROM ingredient").fetchone()[0], "aliases": db.execute("SELECT count(*) FROM ingredient_alias").fetchone()[0], "flag_rules": db.execute("SELECT count(*) FROM flag_rule").fetchone()[0]}
+        return {"scans": db.execute("SELECT count(*) FROM scan").fetchone()[0], "ingredients": db.execute("SELECT count(*) FROM ingredient").fetchone()[0], "aliases": db.execute("SELECT count(*) FROM ingredient_alias").fetchone()[0], "flag_rules": db.execute("SELECT count(*) FROM flag_rule").fetchone()[0], "ingredient_info_cache": db.execute("SELECT count(*) FROM ingredient_info").fetchone()[0], "alternative_cache": db.execute("SELECT count(*) FROM alternative_cache").fetchone()[0]}
 
 def demo_queries(path: Path | str = DB_PATH) -> list[dict[str, Any]]:
     sql_path = Path(__file__).parents[2] / ".." / "docs" / "QUERIES.sql"
@@ -99,6 +116,10 @@ def demo_queries(path: Path | str = DB_PATH) -> list[dict[str, Any]]:
             title, sql = chunk.split("\n", 1)
             output.append({"title": title.strip(), "rows": [dict(row) for row in db.execute(sql.strip())]})
         return output
+
+def explain_indexed_recent_query(path: Path | str = DB_PATH) -> list[dict[str, Any]]:
+    with session(path) as db:
+        return [dict(row) for row in db.execute("EXPLAIN QUERY PLAN SELECT id,score,band FROM scan ORDER BY created_at DESC LIMIT 10")]
 
 def normalize_cache_name(name: str) -> str:
     return " ".join(name.casefold().split())
