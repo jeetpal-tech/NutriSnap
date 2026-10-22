@@ -3,6 +3,9 @@ backend/models/
 backend/data/nutrisnap.db
 backend/data/nutrisnap.db-shm
 backend/data/nutrisnap.db-wal
+backend/data/test-*.db
+backend/data/test-*.db-shm
+backend/data/test-*.db-wal
 backend/.venv
 backend/__pycache__/
 backend/**/__pycache__/

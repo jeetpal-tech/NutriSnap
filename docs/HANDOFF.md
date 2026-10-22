@@ -1,41 +1,24 @@
 # NutriSnap Handoff
 
 ## Status
-- Original delivery phases 1–4 are complete; current request adds MiniLM, Gemini, image scan, and camera-first demo features.
-- Phase A adapter implemented. `NOVA_BACKEND=minilm_head` loads the supplied numeric NPZ head and local/downloaded MiniLM encoder; startup self-test gates use.
-- Phase A runtime validation is blocked: PyPI transfers repeatedly timed out while downloading NumPy (26 KB/s); CPU torch and encoder download were not reached. Synthetic head test is present but skipped without NumPy.
-- Phase B complete: Gemini JSON-schema service for OCR text, ingredient summaries, and alternatives; SQLite cache, owner-KB override, 20-second timeout, no credential/prompt logging. Mock tests do not use the network.
-- Phase C complete: `/api/scan-image` accepts in-memory multipart images up to 5 MB; OCR and paste share the scoring pipeline; responses add source, detected text, summaries, alternatives; health reports Gemini configuration.
-- Phase D complete: scan source check, redacted result JSON, reserved null user_id, WAL/FK per connection, IST history, migrations, 16 queries plus EXPLAIN plan, SQLite rationale/normalization/privacy docs.
-- Phase E complete: camera-first scan with capture/upload and 1280 px JPEG resizing, paste mode, progress, editable OCR text, concern-sorted ingredient detail, AI labels, alternatives, searchable local-time history, and live database explorer.
-
-## Components
-- Backend: `backend/app/core/` parser, matcher, rules, scoring, gate, SQLite layer, Gemini service, and model adapters.
-- API: `backend/app/api/routes.py`; endpoints: analyze, health, history, stats, and queries.
-- Database: `backend/data/nutrisnap.db` (ignored); schema, idempotent seeding, and best-effort scan writes in `backend/app/core/database.py`.
-- Frontend: `frontend/src/App.jsx`; Scan, Results, History, and Database routes; Tailwind tokens in `frontend/tailwind.config.js`.
-- Twelve demo SQL queries: `docs/QUERIES.sql`; database diagram: `docs/DATABASE.md`.
+- Original delivery phases 1–4 are complete. The follow-on MiniLM, Gemini, camera scan, and demo UI phases A–F are implemented and committed.
+- A: MiniLM head adapter loads numeric NPZ + JSON, normalizes encoder output, applies linear softmax head, and gates readiness on 12 startup examples.
+- A runtime validation remains outstanding: NumPy installation timed out; CPU PyTorch and encoder download were not completed. The synthetic NPZ unit test skips without NumPy.
+- B: Gemini JSON-schema OCR, ingredient information, and alternatives use a 20-second timeout, SQLite caches, and owner-KB overrides. Provider failures are contained. Tests mock Gemini; no provider calls are made by tests.
+- C: `/api/scan-image` handles in-memory images up to 5 MB; text and image scans share scoring. Health reports ML and Gemini status.
+- D: SQLite WAL/FK, source, redacted reopenable results, null reserved user_id, IST history, migrations, 16 SQL queries, and query-plan display are in place.
+- E: Camera-first scan/capture/upload, 1280 px JPEG resize, paste mode, progress, editable OCR text, results and concern-sorted detail, searchable history, and database explorer are implemented.
+- F: Golden eval, warm-cache script, Windows setup instructions, CPU PyTorch install, and root `run_dev.bat` are documented.
 
 ## Run
-- Setup backend: `cd backend; py -3 -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt`.
-- Setup frontend once: `cd frontend; npm install`.
-- Start both after setup: run root `run_dev.bat`.
-- Run API alone from `backend`: `.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000`.
-- Run UI alone from `frontend`: `npm run dev`; configure API with `VITE_API_URL` in `.env`.
+- One time, from project root: create `backend\.venv`, install CPU torch with `pip install torch --index-url https://download.pytorch.org/whl/cpu`, install `backend\requirements.txt`, run `npm --prefix frontend install`, and copy `backend\.env.example` to `backend\.env`.
+- Add `GEMINI_API_KEY` to ignored `backend\.env` for image OCR and generated explanations. Do not commit credentials.
+- Launch from project root with `run_dev.bat`; open `http://localhost:5173`. API docs: `http://localhost:8000/docs`.
+- Local head files: `backend/models/minilm-head/head.npz`, `head_config.json`. Encoder files go in `backend/models/minilm-encoder/` and can download once on first startup.
 
-## Verification
-- Latest backend: 129 passed, 1 skipped (NumPy unavailable), 1 warning.
-- Frontend Phase E: `npm run build` succeeds (Vite production bundle).
-- `eval_golden.py` handles empty and populated owner-supplied JSON; current golden set is empty.
-- `init_db.py` and `demo_queries.py` run from `backend`.
-- Visual check at 360 px and 1280 px remains pending because this environment exposes no browser tool or Chrome/Edge executable.
-
-## Model files and activation
-- Head files are local/ignored: `backend/models/minilm-head/head.npz` and `head_config.json`; encoder target: `backend/models/minilm-encoder/`.
-- `.env.example` uses `NOVA_BACKEND=minilm_head`, `NOVA_MODEL_DIR=backend/models/minilm-head`, and `ML_ENABLED=true`.
-
-## Known limitations
-- Network package/model downloads are unavailable or too slow in this environment; verify the adapter on a connected machine.
-- The 360/1280 visual browser review remains outstanding.
-- npm reported 13 advisories (3 moderate, 10 high); recheck before any public deployment.
-- Golden products and KB verification must be supplied/reviewed by the owner. Do not invent branded ingredient data or health claims.
+## Verification and limits
+- Backend: 129 passed, 1 skipped (NumPy unavailable), one Starlette/httpx deprecation warning.
+- Frontend: `npm run build` succeeds. `eval_golden.py` succeeds with the intentionally empty golden set. `init_db.py` and `demo_queries.py` run successfully.
+- Browser review at 360 px and 1280 px is outstanding; this environment has no browser tool or Chrome/Edge executable.
+- MiniLM runtime and real Gemini calls remain unverified here. Supply a Gemini key and reachable network, and install CPU PyTorch/NumPy before presenting those integrations as live.
+- npm previously reported 13 advisories (3 moderate, 10 high). Golden examples and health content require owner review; no branded ingredient lists were invented.
