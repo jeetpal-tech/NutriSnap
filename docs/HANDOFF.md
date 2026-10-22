@@ -1,32 +1,37 @@
 # NutriSnap Handoff
 
 ## Status
-- M3a gate, orchestrator, API schema, mock-model fallbacks: complete (118 tests pass).
-- ML is intentionally out of scope for this presentation. Production model remains `StubNovaModel`; health reports `disabled` and normal analysis returns `rule_based` / `ml_disabled`.
-- `hf_nova.py` and `minilm_head.py` stay stubs. `NOVA_BACKEND` remains the future adapter selector.
-- M3b/SQLite phase: complete. Schema/seeding, best-effort scan writes, history/stats/query endpoints, 12 query examples, docs, and tests are in place.
-- Frontend phase: complete. Scan, Results, History, and Database pages implemented with Tailwind 3.4 and locked npm dependencies; production build succeeds.
-- Current work: Windows run/evaluation polish.
+- Delivery phases 1–4 implemented. M3a gate/orchestrator remains testable with mocks; model runtime is rules-only.
+- `NOVA_BACKEND` selects a stub adapter. Both adapters report `disabled`; every normal successful analysis uses `rule_based` with `ml_disabled`.
+- No ML weights are downloaded or loaded. `hf_nova.py` and `minilm_head.py` remain placeholders.
 
-## Project layout
-- Backend: `backend/app/core/` parser, normalizer, matcher, rules, gate, scoring, and ML protocol/stubs.
-- API: `backend/app/api/routes.py`; schemas: `backend/app/schemas.py`.
-- Seed KB: `backend/app/data/kb/ingredients.json`, `category_rules.json`, `category_notes.json`.
-- Tests: `backend/tests/`; golden set: `backend/app/data/golden/golden_products.json`.
-- SQLite: `backend/app/core/database.py`; initialize with `cd backend; .venv\Scripts\python.exe scripts\init_db.py`.
-- Frontend: `frontend/src/App.jsx`, tokens in `frontend/tailwind.config.js`; configure `VITE_API_URL` via `frontend/.env`.
+## Components
+- Backend: `backend/app/core/` parser, matcher, rules, scoring, gate, SQLite layer, and adapter contract.
+- API: `backend/app/api/routes.py`; endpoints: analyze, health, history, stats, and queries.
+- Database: `backend/data/nutrisnap.db` (ignored); schema, idempotent seeding, and best-effort scan writes in `backend/app/core/database.py`.
+- Frontend: `frontend/src/App.jsx`; Scan, Results, History, and Database routes; Tailwind tokens in `frontend/tailwind.config.js`.
+- Twelve demo SQL queries: `docs/QUERIES.sql`; database diagram: `docs/DATABASE.md`.
 
-## Run and verify
-- Backend tests: from `backend`, `.venv\Scripts\python.exe -m pytest -q tests`.
-- Current result: 121 tests passed; `-p no:cacheprovider` avoids restricted pytest cache writes.
-- Frontend build: from `frontend`, `npm run build` succeeds.
-- Start API from `backend`: `.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000`.
-- Frontend setup/run: from `frontend`, `npm install` then `npm run dev`.
-- No real model download or loading is allowed for this demo.
+## Run
+- Setup backend: `cd backend; py -3 -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt`.
+- Setup frontend once: `cd frontend; npm install`.
+- Start both after setup: run root `run_dev.bat`.
+- Run API alone from `backend`: `.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000`.
+- Run UI alone from `frontend`: `npm run dev`; configure API with `VITE_API_URL` in `.env`.
 
-## Decisions and limits
-- Use stdlib `sqlite3`, no ORM; persist scan scores and ingredient rows only, never submitted text or user identifiers.
-- Do not fabricate branded ingredient lists or health claims. Empty golden data stays empty.
-- ML plug-in remains available by selecting `NOVA_BACKEND` and implementing its adapter contract, but is disabled for this delivery.
-- Known limitation: validated mock gate tests exercise future ML paths; the presentation runtime is rules-only.
-- Visual review at 360 px and 1280 px is pending: no built-in browser tool or Chrome/Edge executable is available in this environment.
+## Verification
+- Backend: 123 passed using `.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests`.
+- Frontend: `npm run build` succeeds.
+- `eval_golden.py` handles empty and populated owner-supplied JSON; current golden set is empty.
+- `init_db.py` and `demo_queries.py` run from `backend`.
+- Visual check at 360 px and 1280 px is pending because this environment exposes no browser tool or Chrome/Edge executable.
+
+## ML plug-in checklist
+- Implement `MiniLMHeadModel` in `backend/app/core/ml/minilm_head.py` using `NovaModel` from `base.py`; keep gate and orchestrator response/error behavior.
+- Place local files under `backend/models/minilm-head/`: `config.json`, `model.safetensors`, `tokenizer.json`, `tokenizer_config.json`, `special_tokens_map.json`, `vocab.txt`, `head.joblib`, `label_map.json`.
+- Add pinned ML runtime dependencies, set `NOVA_BACKEND=minilm_head`, `NOVA_MODEL_DIR=backend/models/minilm-head`, and `ML_ENABLED=true`; restart and verify health, fallback tests, and owner-supplied evaluation before use. Default remains `ML_ENABLED=false`.
+
+## Known limitations
+- The 360/1280 visual browser review remains outstanding.
+- npm reported 13 advisories (3 moderate, 10 high); recheck before any public deployment.
+- Golden products and KB verification must be supplied/reviewed by the owner. Do not invent branded ingredient data or health claims.

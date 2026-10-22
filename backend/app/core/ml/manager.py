@@ -34,10 +34,15 @@ _current_model: NovaModel | None = None
 
 
 def get_model() -> NovaModel:
-    """Return the currently registered NovaModel, or StubNovaModel if none set."""
+    """Return the adapter selected by NOVA_BACKEND; current adapters are stubs."""
     global _current_model
     if _current_model is None:
-        _current_model = StubNovaModel()
+        if settings.nova_backend == "minilm_head":
+            from app.core.ml.minilm_head import MiniLMHeadModel
+            _current_model = MiniLMHeadModel()
+        else:
+            from app.core.ml.hf_nova import HfNovaModel
+            _current_model = HfNovaModel()
     return _current_model
 
 

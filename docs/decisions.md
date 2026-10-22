@@ -44,4 +44,13 @@ See also: `docs/ARCHITECTURE.md` §15 (architectural decisions ADR-1 to ADR-13).
 
 ## Known issues
 
-*(To be updated as milestones progress.)*
+- Presentation build is rules-only. Both selectable adapters remain stubs; no model is downloaded or loaded.
+- The browser-based 360 px and 1280 px visual review could not be run in the current agent environment because no browser tool or Chrome/Edge executable is exposed.
+- npm reported 13 dependency advisories (3 moderate, 10 high) during the frontend install; the app builds successfully. Revisit with `npm audit` before a public deployment.
+
+## Presentation delivery (2026-10-22)
+
+- Chose stdlib SQLite at `backend/data/nutrisnap.db`; pasted full ingredient text and user identifiers are never persisted.
+- Kept `hf_nova.py` and `minilm_head.py` as non-loading stubs. `NOVA_BACKEND` selects the future adapter seam; runtime status remains disabled.
+- The MiniLM integration expects local encoder files plus `head.joblib` and `label_map.json` in `backend/models/minilm-head/`; see README for the activation checklist.
+- Golden evaluation uses only owner-supplied products and reports rules-only band agreement. The supplied golden JSON is empty.

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     # ── ML feature switches ────────────────────────────────────────────────
-    ml_enabled: bool = True
+    ml_enabled: bool = False
     nova_backend: Literal["hf_hsilvosa", "minilm_head"] = "hf_hsilvosa"
     nova_model_dir: str = "backend/models/hsilvosa-nova"
     nova_model_revision: str = "f252e3546650954596ff7e5926aab4559c433909"

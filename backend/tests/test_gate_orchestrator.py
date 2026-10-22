@@ -47,8 +47,9 @@ def kb():
 
 
 @pytest.fixture(autouse=True)
-def reset_model():
+def reset_model(monkeypatch):
     """Reset the model to a fresh MockNovaModel before each test."""
+    monkeypatch.setattr(settings, "ml_enabled", True)
     mock = MockNovaModel(status="ready")
     set_model(mock)
     yield mock

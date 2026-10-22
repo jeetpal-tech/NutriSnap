@@ -1,6 +1,6 @@
 # NutriSnap
 
-**Packaged food harmfulness detector for Indian consumers.** Paste an ingredient list, get a 0-100 health score, a per-ingredient breakdown, a NOVA processing badge and safer-swap tips. The score is **ML-assisted** (a pretrained NOVA processing-level classifier from Hugging Face) and **automatically falls back to a transparent rule engine** whenever the ML result is unavailable, low-confidence, or inconsistent with the rules.
+**Packaged-food ingredient analyzer for Indian consumers.** Paste an ingredient list to get a 0-100 rule-based score and per-ingredient breakdown. The presentation build keeps ML disabled; the adapter interface and fallback gate remain ready for a later model integration.
 
 - Status: academic mini-project, **deadline 2026-10-23**, local-demo scope
 - Owner: Jeetpal (B.Tech AI & DS)
@@ -47,8 +47,8 @@ Input that is too short or does not look like food text is rejected before scori
 | Feature | Release | Flag | Default |
 |---|---|---|---|
 | Text ingredient analysis, score, band, breakdown | 1 | - | on |
-| ML-assisted scoring + automatic rule fallback + method badge | 1 | `ML_ENABLED` | on |
-| Scan history (browser localStorage) | 1 | - | on |
+| ML adapter and automatic fallback seam | 1 | `ML_ENABLED` | off in presentation build |
+| Scan history (local SQLite) | 1 | - | on |
 | NOVA badge | 1 | `VITE_FEATURE_NOVA_BADGE` | on |
 | PDF export (browser print to PDF) | 1 | `VITE_FEATURE_EXPORT` | on |
 | Health profile (diabetes / hypertension / high cholesterol), swap tips | 1 if time | - | on |
@@ -65,13 +65,12 @@ Release 1 is the demo target for 2026-10-23. Release 2 features are built in the
 
 ```
 React (Vite + Tailwind)  --HTTP/JSON-->  FastAPI
-   |  localStorage: history, profile,         |
-   |  tracker, language                       |
+   |  browser preferences                     | SQLite: score history |
    |                      language -> parser -> normalizer -> matcher -> knowledge base (JSON)
    |                                          |
    |                     +--------------------+--------------------+
    |                     |                                         |
-   |              rule engine (always runs)              ML adapter (HF NOVA model)
+   |              rule engine (always runs)              ML adapter (disabled stub)
    |                     |                                         |
    |                     +--------------> gate / orchestrator <----+
    |                                          |
@@ -81,9 +80,9 @@ Chrome/Edge extension (MV3)  ----HTTP/JSON---->  same API
 
 ## Tech stack
 
-- **Backend:** Python 3.10+, FastAPI, Pydantic v2, rapidfuzz, PyTorch (CPU), transformers, scikit-learn, joblib
-- **ML:** `hsilvosa/nova-group-classifier` (Hugging Face, Apache-2.0), with a self-trained fallback head as plan B
-- **Frontend:** React, Vite, Tailwind CSS 3.x, React Router, react-i18next, `@fontsource` fonts (Inter, Noto Sans Devanagari)
+- **Backend:** Python 3.10+, FastAPI, Pydantic v2, rapidfuzz, stdlib SQLite
+- **ML:** disabled for this presentation; adapter stubs are retained
+- **Frontend:** React, Vite, Tailwind CSS 3.4, React Router, lucide-react
 - **Extension:** plain JavaScript, Manifest V3, no build step
 - **Design:** built from the design brief in `docs/ARCHITECTURE.md` section 10.1 (light theme, Tailwind tokens)
 - **Not used in Release 1 (not needed, not a hardware limit):** Postgres, Redis, Docker, pgvector, auth, cloud deployment
@@ -92,35 +91,30 @@ Chrome/Edge extension (MV3)  ----HTTP/JSON---->  same API
 
 - Python 3.10+ and Node.js 18+
 - Chrome or Edge for the extension
-- About 600 MB disk for the model
+- No model download or model files are required
 
 ## Quick start
 
-```bash
-# 1) Backend
+Windows PowerShell quick start (run each block in a separate terminal):
+
+```powershell
+# Backend setup (one time)
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -r requirements.txt
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# 2) Download the pretrained model once (pinned revision, stored in backend/models/)
-python scripts/download_model.py
+# Backend API
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+```
 
-# 3) Run the API (avoid --reload when ML is enabled; it reloads the model on every save)
-uvicorn app.main:app --port 8000
-
-# 4) Frontend (new terminal)
+```powershell
+# Frontend setup and server (one time, then run npm run dev on later starts)
 cd frontend
 npm install
-npm run dev        # http://localhost:5173
+npm run dev
 ```
 
-Rules-only development (no model download needed):
-
-```bash
-ML_ENABLED=false uvicorn app.main:app --port 8000        # PowerShell: $env:ML_ENABLED="false"; uvicorn app.main:app --port 8000
-```
+Open `http://localhost:5173`. The API creates/seeds `backend/data/nutrisnap.db` at startup. For one-click launch after setup, run `run_dev.bat` from the project root. The backend is available at `http://localhost:8000/docs`.
 
 ### Browser extension (Release 2)
 
@@ -135,7 +129,7 @@ Backend environment variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ML_ENABLED` | `true` | Master switch for the ML path |
+| `ML_ENABLED` | `false` | Master switch for the ML path; disabled in the presentation build |
 | `NOVA_BACKEND` | `hf_hsilvosa` | `hf_hsilvosa` (plan A) or `minilm_head` (plan B) |
 | `NOVA_MODEL_DIR` | `backend/models/hsilvosa-nova` | Local model folder |
 | `NOVA_MODEL_REVISION` | `f252e3546650954596ff7e5926aab4559c433909` | Pinned HF commit |
@@ -153,10 +147,22 @@ Backend environment variables:
 
 Frontend (`frontend/.env`): `VITE_API_URL`, `VITE_FEATURE_NOVA_BADGE`, `VITE_FEATURE_EXPORT`, `VITE_FEATURE_NUTRISCORE`, `VITE_FEATURE_TRACKER`, `VITE_FEATURE_HINDI`.
 
+### Later: enable the MiniLM model adapter
+
+ML is disabled for the presentation. To integrate a validated MiniLM model later:
+
+1. Implement `MiniLMHeadModel` in `backend/app/core/ml/minilm_head.py` with `load()` and `predict(text)` matching `backend/app/core/ml/base.py`; return NOVA 1–4 probabilities and raise `ModelError` on inference failures.
+2. Put the fully local encoder and trained head in `backend/models/minilm-head/`: `config.json`, `model.safetensors`, `tokenizer.json`, `tokenizer_config.json`, `special_tokens_map.json`, `vocab.txt`, `head.joblib`, and `label_map.json`. `head.joblib` and `label_map.json` come from the owner’s training export; do not download files at app startup.
+3. Add only the ML runtime packages needed by the adapter to `backend/requirements.txt` and freeze their versions.
+4. Set `NOVA_BACKEND=minilm_head`, `NOVA_MODEL_DIR=backend/models/minilm-head`, and `ML_ENABLED=true`. Restart the API; confirm `/api/health` reports `ml_status: ready`, run mocked gate tests and evaluation on owner-supplied data, and confirm fallback behavior before presenting ML results.
+
+Until those steps are completed, both adapter choices remain stubs and analysis always returns `fallback_reason: ml_disabled`.
+
 ## API (summary)
 
 - `POST /api/analyze` body `{ "ingredients_text": "...", "profile": {"conditions": ["diabetes"]}, "lang": "en" | "hi", "nutrition": { ... per 100 g ... }, "force_mode": "auto" | "rules" }` (everything except `ingredients_text` is optional)
 - `GET /api/health` returns `{ "status": "ok", "ml_status": "ready" | "loading" | "disabled" | "error", "features": { ... } }`
+- `GET /api/history?limit=50`, `GET /api/stats`, and `GET /api/queries` provide the SQLite demo data.
 
 Full schemas and examples: `docs/ARCHITECTURE.md` section 9.
 
@@ -164,9 +170,12 @@ Full schemas and examples: `docs/ARCHITECTURE.md` section 9.
 
 ```bash
 cd backend
-pytest -q                       # parser, matcher, rules, gate (mocked ML), API contract, Nutri-Score, Hindi
-python scripts/eval_golden.py   # hand-labelled golden set: band agreement and method usage
-cd ../frontend && npm test      # pure-function tests (tracker math, history cap, prefill)
+.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests
+.venv\Scripts\python.exe scripts/eval_golden.py
+.venv\Scripts\python.exe scripts/init_db.py
+.venv\Scripts\python.exe scripts/demo_queries.py
+cd ..\frontend
+npm run build
 ```
 
 ## Project structure
@@ -186,7 +195,7 @@ Detailed tree: `docs/ARCHITECTURE.md` section 14.
 ## Data, models and attribution
 
 - Training/evaluation data: [Open Food Facts](https://world.openfoodfacts.org/), licensed under the **Open Database License (ODbL)**; individual contents under the Database Contents License. Attribution is required: "Contains information from Open Food Facts".
-- Model: `hsilvosa/nova-group-classifier` (Apache-2.0). Loaded from a pinned commit because the repo contains a pickled scikit-learn head (`.joblib`); only load pickles from sources and revisions you trust.
+- Optional future model: `hsilvosa/nova-group-classifier` (Apache-2.0). The presentation build does not download or load it; adapter integration is described above.
 - Health content (ingredient explanations, daily limits) must be sourced from FSSAI, ICMR-NIN, WHO or peer-reviewed literature. Entries without a verified source are marked unverified.
 - Nutri-Score: computed with the published algorithm; the official logo is not used and the grade is not an Indian standard.
 
