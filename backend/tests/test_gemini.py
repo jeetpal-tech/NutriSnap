@@ -64,15 +64,16 @@ def test_complete_list_is_sent_to_gemini_even_when_database_has_notes(monkeypatc
 def test_failed_full_list_analysis_uses_database_fallback_only(monkeypatch):
     path = temp_db()
     names = ["sugar", "salt"]
-    save_ingredient_info([{"name":"Sugar","what_it_is":"A sweetener.","health_note":"Cached general note.","concern_level":"medium"}], "old-model", path)
+    save_ingredient_info([{"name":"Sugar","what_it_is":"A sweetener.","health_note":"Cached general note.","concern_level":"medium"}], settings.gemini_model, path)
     cache_key = gemini._list_cache_key(names)
-    save_alternatives(cache_key, [{"type":"Unsweetened cereal","reason":"Avoids added sugar."}], "old-model", path)
+    save_alternatives(cache_key, [{"type":"Unsweetened cereal","reason":"Avoids added sugar."}], settings.gemini_model, path)
     monkeypatch.setattr(settings, "gemini_api_key", "test-key")
     monkeypatch.setattr(gemini, "_request_json", lambda *a, **k: None)
     result = gemini.analyze_ingredient_list("sugar, salt", names, path=path)
     assert result["source"] == "database_fallback"
     assert result["ingredient_info"][0]["name"] == "sugar"
     assert result["ingredient_info"][0]["source"] == "database_fallback"
+    assert result["ingredient_info"][1]["risk_level"] == "unknown"
     assert result["alternatives"][0]["source"] == "database_fallback"
     path.unlink(missing_ok=True)
 

@@ -54,3 +54,13 @@ See also: `docs/ARCHITECTURE.md` §15 (architectural decisions ADR-1 to ADR-13).
 - Kept `hf_nova.py` and `minilm_head.py` as non-loading stubs. `NOVA_BACKEND` selects the future adapter seam; runtime status remains disabled.
 - The MiniLM integration expects local encoder files plus `head.joblib` and `label_map.json` in `backend/models/minilm-head/`; see README for the activation checklist.
 - Golden evaluation uses only owner-supplied products and reports rules-only band agreement. The supplied golden JSON is empty.
+
+## Repair pass (2026-10-22)
+
+- Kept SQLite for the current single-node demo rather than introducing PostgreSQL or MongoDB. The schema now records scan lifecycle state, opaque public IDs, idempotency metadata, result snapshots, ingredient children, and provider-attempt outcomes.
+- Removed the customer-facing database explorer and internal query/stat routes. Database diagrams and SQL examples remain documentation/local-tool material for the presentation.
+- Gemini remains enrichment/OCR only. It is attempted before stored notes when configured; transient failures are retried within a bounded deadline, valid partial responses survive, and missing items stay unknown rather than becoming low risk.
+- A live smoke request on 2026-10-22 returned HTTP 429/exhausted-quota behavior. The app completed with a limited fallback result and recorded the provider outcome. This is evidence of graceful degradation, not proof of healthy quota or provider availability.
+- Fixed a migration edge case where an older `provider_attempt` table could retain a foreign key to a deleted `scan_legacy` table after the scan-table rebuild. `initialize()` repairs that table without discarding rows.
+- Replaced the customer UI with the neo-brutalist design system and removed the public `/database` route. Exact 360 px and 1280 px screenshot review remains an owner check.
+- Broader session ownership/production security work from the repair prompt was explicitly deferred by the owner; do not expand that scope in this pass.

@@ -20,9 +20,10 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import router, set_knowledge_base
 from app.config import settings
+from app.core import gemini
 from app.core.knowledge_base import KnowledgeBase
 from app.core.ml.manager import init_background_model_loader
-from app.core.database import seed as seed_database
+from app.core.database import reconcile_interrupted, seed as seed_database
 
 logging.basicConfig(
     level=settings.log_level.upper(),
@@ -38,7 +39,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     kb = KnowledgeBase()
     kb.load()
     set_knowledge_base(kb)
-    seed_database(kb)
+    seed_database(kb, settings.database_path_value())
+    recovered = reconcile_interrupted(settings.database_path_value())
+    if recovered:
+        logger.info("Marked %d abandoned scan(s) as interrupted.", recovered)
     logger.info(
         "Knowledge base loaded: %d entries (version %d)",
         len(kb.entries),
@@ -46,6 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     init_background_model_loader()
     yield
+    gemini.close_client()
     logger.info("NutriSnap shutdown.")
 
 
@@ -57,8 +62,9 @@ app = FastAPI(
     ),
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url=None,
+    docs_url="/docs" if settings.enable_api_docs and not settings.production else None,
+    redoc_url="/redoc" if settings.enable_api_docs and not settings.production else None,
+    openapi_url="/openapi.json" if settings.enable_api_docs and not settings.production else None,
 )
 
 # ── CORS ───────────────────────────────────────────────────────────────────────

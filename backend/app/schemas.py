@@ -61,8 +61,10 @@ class NovaResult(BaseModel):
     top: int
     confidence: float
     probs: dict[str, float]
-    model_id: str
-    latency_ms: int
+    # Kept nullable for internal/debug consumers; customer routes omit these
+    # implementation details from their public projection.
+    model_id: str | None = Field(default=None, exclude=True)
+    latency_ms: int | None = Field(default=None, exclude=True)
 
 
 class NovaBadge(BaseModel):
@@ -130,7 +132,7 @@ class SafetyCapApplied(BaseModel):
 # ── Main response ──────────────────────────────────────────────────────────────
 
 class AnalyzeResponse(BaseModel):
-    status: Literal["ok", "insufficient_input", "not_food_text"]
+    status: Literal["ok", "insufficient_input", "not_food_text", "processing", "failed"]
     message: str | None = None
     score: int | None = None
     band: Literal["Low Risk", "Moderate Risk", "High Risk"] | None = None
@@ -155,8 +157,28 @@ class AnalyzeResponse(BaseModel):
     source: Literal["camera", "paste"] | None = None
     detected_text: str | None = None
     ingredient_info: list[dict[str, Any]] = Field(default_factory=list)
-    ingredient_analysis_source: Literal["gemini", "database_fallback", "unavailable"] | None = None
+    ingredient_analysis_source: Literal["gemini", "mixed", "database_fallback", "unavailable"] | None = None
     alternatives: list[dict[str, Any]] = Field(default_factory=list)
+    # Durable scan lifecycle metadata. scan_id is opaque and safe to use for
+    # reopen/detail requests; no database integer or owner identifier leaves
+    # the API.
+    scan_id: str | None = None
+    request_id: str | None = None
+    scan_status: Literal[
+        "received",
+        "extracting",
+        "awaiting_confirmation",
+        "analyzing",
+        "completed",
+        "completed_limited",
+        "failed",
+        "cancelled",
+        "interrupted",
+    ] | None = None
+    persisted: bool = False
+    save_status: Literal["saved", "not_saved", "save_failed", "reused"] = "not_saved"
+    completeness: Literal["complete", "limited"] | None = None
+    message_code: str | None = None
 
 
 # ── Health response ────────────────────────────────────────────────────────────
@@ -168,10 +190,11 @@ class HealthFeatures(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-    ml_status: str
+    ml_ready: bool | None = None
+    # Compatibility fields for local operational checks.  They contain only
+    # coarse state and never provider credentials, errors, or request data.
+    ml_status: str | None = None
     ml_error: str | None = None
-    gemini_status: Literal["configured", "missing_key"] = "missing_key"
-    backend: str
-    kb_version: int
-    kb_entries: int
+    gemini_status: Literal["configured", "missing_key"] | None = None
+    backend: str | None = None
     features: HealthFeatures

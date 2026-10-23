@@ -1,24 +1,57 @@
 # NutriSnap Handoff
 
-## Status
-- Original delivery phases 1–4 are complete. The follow-on MiniLM, Gemini, camera scan, and demo UI phases A–F are implemented and committed.
-- A: MiniLM head adapter loads numeric NPZ + JSON, normalizes encoder output, applies linear softmax head, and gates readiness on 12 startup examples.
-- A runtime validation remains outstanding: NumPy installation timed out; CPU PyTorch and encoder download were not completed. The synthetic NPZ unit test skips without NumPy.
-- B: Gemini JSON-schema OCR plus full-list ingredient identification, low/medium/high risk assessments, and three alternatives use a 20-second timeout. Every configured scan is analyzed by Gemini first; owner KB and SQLite notes/alternatives are consulted only after a missing key, provider error, or incomplete response. The response exposes `ingredient_analysis_source`.
-- C: `/api/scan-image` handles in-memory images up to 5 MB; text and image scans share scoring. Health reports ML and Gemini status.
-- D: SQLite WAL/FK, source, redacted reopenable results, null reserved user_id, IST history, migrations, 16 SQL queries, and query-plan display are in place.
-- E: Camera-first scan/capture/upload, 1280 px JPEG resize, paste mode, progress, editable OCR text, results and concern-sorted detail, searchable history, and database explorer are implemented.
-- F: Golden eval, warm-cache script, Windows setup instructions, CPU PyTorch install, and root `run_dev.bat` are documented.
+## Goal
+
+Deliver a shopper-facing NutriSnap app with a professional neo-brutalist UI, no public database/schema/debug screens, Gemini-first enrichment with bounded fallback, and durable recording of accepted scans. The user explicitly deferred the broader security/ownership work in section 7 of `docs/CODEX_FULLSTACK_FIX_PROMPT.md`; do not expand that scope in the next pass unless requested.
+
+## Current state
+
+- Frontend repair is implemented: customer navigation is Scan + History only; `/database` redirects to Scan; database/SQL/query/provider-internal copy is removed from the UI; Camera/Upload/Paste flows, OCR review, results, history, empty/loading/error states, and neo-brutalist tokens/components are in place.
+- Backend repair is implemented: Gemini calls use a managed client, typed failure categories, a bounded retry/deadline policy, partial-result retention, item-level unknown states, versioned cache freshness, and fallback without changing the deterministic score.
+- Scan persistence is implemented with a SQLite lifecycle (`received`/`analyzing`/`completed`/`completed_limited`/`failed`/`interrupted`), opaque public IDs, idempotency keys, result snapshots, ingredient children, provider-attempt records, and restart reconciliation. Existing SQLite is intentionally retained for the single-node demo; PostgreSQL was not introduced.
+- Internal `/api/stats` and `/api/queries` routes are removed. API docs are disabled by default. The professor-facing schema/query material remains in docs and local scripts only.
+- A migration defect was found during live smoke testing: an old database had `provider_attempt` referencing a deleted `scan_legacy` table. `initialize()` now repairs that foreign key in place while preserving rows.
+- Public result projection now removes provider model/cache metadata from ingredient enrichment. The customer UI still labels AI-generated notes and unknown items without exposing internal fallback names.
+- The `?ingredients=...&autorun=1` deep link now automatically runs a pasted-text check, which keeps the existing extension/deep-link contract usable.
+
+## Gemini verification and limit
+
+- A real configured Gemini request was attempted during local smoke testing on October 22, 2026. Google returned HTTP 429/exhausted-quota behavior. NutriSnap did not fail the scan: it recorded the provider outcome and returned a limited result using stored fallback notes/unknown state.
+- This proves the failure path and fallback path, not healthy live Gemini success. Do not claim the provider is reliable until the owner checks quota/key/model availability and repeats a bounded smoke test.
+- Current configured model remains the existing environment choice. No key or secret is stored in this handoff.
 
 ## Run
-- One time, from project root: create `backend\.venv`, install CPU torch with `pip install torch --index-url https://download.pytorch.org/whl/cpu`, install `backend\requirements.txt`, run `npm --prefix frontend install`, and copy `backend\.env.example` to `backend\.env`.
-- Add `GEMINI_API_KEY` to ignored `backend\.env` for image OCR and generated explanations. Do not commit credentials.
-- Launch from project root with `run_dev.bat`; open `http://localhost:5173`. API docs: `http://localhost:8000/docs`.
-- Local head files: `backend/models/minilm-head/head.npz`, `head_config.json`. Encoder files go in `backend/models/minilm-encoder/` and can download once on first startup.
 
-## Verification and limits
-- Backend: 133 passed, 1 skipped (NumPy unavailable), one Starlette/httpx deprecation warning. Gemini analysis tests mock all provider requests.
-- Frontend: `npm run build` succeeds. `eval_golden.py` succeeds with the intentionally empty golden set. `init_db.py` and `demo_queries.py` run successfully.
-- Browser review at 360 px and 1280 px is outstanding; this environment has no browser tool or Chrome/Edge executable.
-- MiniLM runtime and real Gemini calls remain unverified here. Supply a Gemini key and reachable network, and install CPU PyTorch/NumPy before presenting those integrations as live.
-- npm previously reported 13 advisories (3 moderate, 10 high). Golden examples and health content require owner review; no branded ingredient lists were invented.
+From the project root, use the existing setup in README.md, then launch with `run_dev.bat`. The verified local endpoints were `http://localhost:5173` and `http://localhost:8000`.
+
+## Checks completed
+
+- Backend tests: `backend/.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider backend/tests` -> **139 passed, 1 skipped, 1 Starlette/httpx deprecation warning**.
+- Targeted hardening/Gemini tests -> **14 passed, 1 warning**.
+- Python compilation: `backend/.venv/Scripts/python.exe -m compileall -q backend/app backend/tests` -> passed.
+- Frontend build: `npm --prefix frontend run build` -> passed; Vite transformed 1,585 modules.
+- Database scripts: `backend/.venv/Scripts/python.exe scripts/init_db.py` -> passed; `demo_queries.py` -> passed; `eval_golden.py` -> completed with the intentionally empty golden set, so accuracy evaluation remains **not performed**.
+- Browser smoke: localhost Scan rendered without initial camera permission; `?ingredients=...&autorun=1` reached Results; Results displayed unknown ingredients as “not assessed”; History rendered the saved check; direct `/database` no longer showed database content; mobile viewport around 310 px had no horizontal scrollbar after the responsive fix. Exact 360 px and 1280 px screenshot checks remain to be done by the owner/browser.
+- Live API checks: `/api/health` returned 200; fresh `/docs` and `/api/stats` returned 404; `/api/analyze` returned a persisted `completed_limited` result after the provider quota failure.
+
+## Changed files
+
+- `backend/app/core/gemini.py`: bounded provider integration, typed outcomes, retries, partial validation, cache version/TTL use.
+- `backend/app/core/database.py`: lifecycle/idempotency/cache/provider-attempt persistence, migrations, legacy FK repair, local query helpers retained.
+- `backend/app/api/routes.py`, `backend/app/main.py`, `backend/app/config.py`, `backend/app/schemas.py`: public endpoint projection, lifecycle orchestration, docs gating, stable paths, response metadata.
+- `backend/tests/conftest.py`, `backend/tests/test_gemini.py`, `backend/tests/test_backend_hardening.py`: deterministic provider, migration, lifecycle, route, and privacy-projection checks.
+- `frontend/src/App.jsx`, `frontend/src/style.css`, `frontend/tailwind.config.js`, `frontend/src/components/`, `frontend/src/pages/`, `frontend/src/lib/`: neo-brutalist customer flow and database/debug removal.
+- `docs/CODEX_FULLSTACK_FIX_PROMPT.md`: full repair specification supplied by the user.
+
+## Remaining gaps
+
+1. Healthy live Gemini success is blocked by the observed 429/quota response; owner action is to verify the key’s quota/model access and rerun the bounded smoke test.
+2. MiniLM/NumPy runtime validation remains incomplete; one existing test is skipped when the local model dependency/artifacts are unavailable.
+3. Golden-product evaluation remains **not performed** because the owner-supplied golden set is empty. Do not invent branded examples.
+4. Exact 360 px and 1280 px visual checks, real readable label-image OCR, and a full browser test suite are still outstanding.
+5. The user deferred the broader section-7 security/ownership work. Existing changes in the current checkout include session-cookie scaffolding from the earlier interrupted work; do not add more security scope without instruction.
+6. npm audit advisories were previously reported and were not blindly upgraded during this repair.
+
+## Next concrete step
+
+Owner should verify Gemini quota/key/model access, then run one pasted scan and one readable label-image scan through `run_dev.bat`. If live Gemini succeeds, inspect that the response is `ingredient_analysis_source`-appropriate, the scan appears in History, and the SQLite `provider_attempt` row records the successful outcome. After that, perform the exact 360/1280 browser review and fill the golden set with real owner-supplied labels.
